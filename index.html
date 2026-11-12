@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VirtualFit: Spatial Try-On</title>
+<meta name="description" content="A visionOS-style spatial virtual try-on hero featuring a 3D frosted-glass garment arc, animated scan-line try-on reveal, and interactive buy card.">
+<meta property="og:title" content="VirtualFit: Spatial Try-On">
+<meta property="og:description" content="A visionOS-style spatial virtual try-on hero featuring a 3D frosted-glass garment arc, animated scan-line try-on reveal, and interactive buy card.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ease:cubic-bezier(.2,.8,.2,1);
+    --sans:"Inter",system-ui,-apple-system,sans-serif;
+    --MH:min(78vh,62vw);
+    --CW:220px;
+    --room:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080623_c94c85a3-23d5-4a0c-afff-41be1b5b8191.png&w=2400&q=85");
+    --model:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080717_e02cb856-b812-4c9b-9b86-8a741c7f65eb.png&w=2688&q=85");
+    --garm:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080719_f5a4cca2-cf42-4957-ab3b-ddec34d2b71a.png&w=2048&q=85");
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#e9e4dc;
+    color:#fff;
+    font-family:var(--sans);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  button{
+    font:inherit;
+    color:inherit;
+    background:none;
+    border:none;
+    padding:0;
+  }
+  @media(pointer:fine){
+    html,body,button{cursor:none}
+  }
+
+  .room{
+    position:fixed;
+    inset:-3%;
+    z-index:0;
+    background:var(--room) center/cover no-repeat;
+    filter:blur(2.5px) saturate(1.05);
+    transform:scale(1.08);
+    will-change:transform;
+  }
+  .room::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:radial-gradient(70% 60% at 50% 45%, rgba(255,252,246,.10), rgba(40,30,20,.16));
+    pointer-events:none;
+  }
+
+  .ghost{
+    position:fixed;
+    left:50%;
+    top:calc(50% - var(--MH) * .42);
+    z-index:2;
+    pointer-events:none;
+    transform:translate(-50%,0);
+    font-weight:900;
+    font-size:calc(var(--MH) * .42);
+    line-height:.8;
+    letter-spacing:-.04em;
+    color:rgba(255,255,255,.3);
+    -webkit-text-stroke:1px rgba(255,255,255,.35);
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+    white-space:nowrap;
+    will-change:transform;
+  }
+  .ghost span{
+    display:inline-block;
+    will-change:transform;
+  }
+
+  .glass{
+    background:linear-gradient(155deg, rgba(250,248,245,.30), rgba(150,144,136,.20) 48%, rgba(205,200,192,.24));
+    backdrop-filter:blur(22px) saturate(1.5);
+    -webkit-backdrop-filter:blur(22px) saturate(1.5);
+    border:1px solid rgba(255,255,255,.5);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -1px 0 rgba(255,255,255,.12), 0 20px 50px -24px rgba(40,30,20,.45);
+  }
+
+  .tabs{
+    position:fixed;
+    top:4.2vh;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:30;
+    display:flex;
+    align-items:center;
+    padding:5px;
+    border-radius:999px;
+    gap:2px;
+    max-width:calc(100vw - 24px);
+  }
+  .tabs .pill{
+    position:absolute;
+    top:5px;
+    left:0;
+    height:38px;
+    border-radius:999px;
+    background:rgba(255,255,255,.92);
+    box-shadow:0 4px 14px -6px rgba(0,0,0,.3);
+    transition:transform .6s var(--ease), width .6s var(--ease);
+    pointer-events:none;
+    z-index:0;
+  }
+  .tab{
+    position:relative;
+    z-index:1;
+    height:38px;
+    padding:0 22px;
+    border-radius:999px;
+    font-size:14px;
+    font-weight:500;
+    color:rgba(30,30,32,.72);
+    white-space:nowrap;
+    flex-shrink:0;
+    transition:color .35s var(--ease);
+  }
+  .tab.on{color:#111}
+
+  .rail{
+    position:fixed;
+    left:max(18px,1.8vw);
+    top:50%;
+    transform:translateY(-50%);
+    z-index:30;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:8px;
+    gap:10px;
+    border-radius:999px;
+  }
+  .rail button{
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    color:rgba(30,30,32,.8);
+    transition:background .3s var(--ease), color .3s var(--ease), transform .25s var(--ease);
+  }
+  .rail button svg{
+    width:20px;
+    height:20px;
+    display:block;
+  }
+  .rail button:not(.on):hover{
+    background:rgba(255,255,255,.35);
+  }
+  .rail button.on{
+    background:rgba(255,255,255,.9);
+    color:#111;
+  }
+  .rail button:active{
+    transform:scale(.92);
+  }
+
+  .stage{
+    position:fixed;
+    inset:0;
+    z-index:10;
+    touch-action:pan-y;
+  }
+  .arc{
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:0;
+    height:0;
+  }
+  .card{
+    position:absolute;
+    width:var(--CW);
+    height:calc(var(--CW) * 1.42);
+    left:calc(var(--CW) * -0.5);
+    top:calc(var(--CW) * -0.71);
+    border-radius:22px;
+    overflow:hidden;
+    will-change:transform;
+    transform-origin:center center;
+    text-align:center;
+    contain:layout style paint;
+  }
+  .card .g{
+    position:absolute;
+    left:8%;
+    right:8%;
+    top:5%;
+    height:66%;
+    background-image:var(--garm);
+    background-repeat:no-repeat;
+    background-size:320% 212.5%;
+    filter:drop-shadow(0 14px 14px rgba(40,30,20,.22));
+    transform:translateZ(0);
+    pointer-events:none;
+  }
+  .card .nm{
+    position:absolute;
+    left:8%;
+    right:8%;
+    bottom:17%;
+    font-weight:500;
+    font-size:calc(var(--CW) * .068);
+    line-height:1.15;
+    color:#fff;
+    text-shadow:0 1px 8px rgba(0,0,0,.18);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    pointer-events:none;
+  }
+  .card .pr{
+    position:absolute;
+    left:8%;
+    right:8%;
+    bottom:7%;
+    font-weight:700;
+    font-size:calc(var(--CW) * .095);
+    line-height:1.1;
+    color:#fff;
+    text-shadow:0 1px 8px rgba(0,0,0,.18);
+    pointer-events:none;
+  }
+  .card .sheen{
+    position:absolute;
+    inset:-20%;
+    background:linear-gradient(105deg, transparent 40%, rgba(255,255,255,.5) 50%, transparent 60%);
+    transform:translateX(-120%);
+    pointer-events:none;
+  }
+
+  .model{
+    position:fixed;
+    left:50%;
+    bottom:0;
+    transform:translateX(-50%);
+    height:var(--MH);
+    aspect-ratio:524/1360;
+    z-index:50;
+    pointer-events:none;
+  }
+  .mfig{
+    position:absolute;
+    inset:0;
+    background-image:var(--model);
+    background-repeat:no-repeat;
+    background-size:513% 111.76%;
+    background-position-y:100%;
+  }
+  #mCur{
+    opacity:0;
+  }
+  #mNext{
+    clip-path:inset(0 0 100% 0);
+    will-change:clip-path,transform;
+  }
+  .model .grid{
+    position:absolute;
+    inset:0;
+    background:repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,255,255,.22) 5px 6px);
+    mix-blend-mode:screen;
+    clip-path:inset(0 0 100% 0);
+    will-change:clip-path;
+  }
+  .model .scan{
+    position:absolute;
+    left:-14%;
+    right:-14%;
+    top:0;
+    height:2px;
+    opacity:0;
+    background:linear-gradient(90deg, transparent, #fff 18%, #fff 82%, transparent);
+    box-shadow:0 0 18px 4px rgba(255,255,255,.75), 0 0 60px 10px rgba(190,225,255,.45);
+    transform:scaleX(.2);
+    will-change:top,transform,opacity;
+  }
+  .model .scan::after{
+    content:"";
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:100%;
+    height:calc(var(--MH) * .12);
+    background:linear-gradient(to top, rgba(220,238,255,.32), transparent);
+    pointer-events:none;
+  }
+
+  .arr{
+    position:fixed;
+    top:50%;
+    transform:translateY(-50%);
+    z-index:30;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    color:#222;
+    transition:transform .25s var(--ease), background .25s var(--ease);
+  }
+  .arr svg{
+    width:16px;
+    height:16px;
+    display:block;
+  }
+  #prev{left:calc(max(18px,1.8vw) + 76px)}
+  #next{right:max(18px,1.8vw)}
+  .arr:hover{background:linear-gradient(155deg, rgba(255,255,255,.52), rgba(220,215,208,.35))}
+  .arr:active{transform:translateY(-50%) scale(.92)}
+
+  .buy{
+    position:fixed;
+    left:50%;
+    bottom:4.6vh;
+    transform:translateX(-50%);
+    z-index:60;
+    width:min(640px, calc(100vw - 32px));
+    display:flex;
+    align-items:center;
+    gap:22px;
+    padding:12px 22px 12px 12px;
+    border-radius:24px;
+    color:#fff;
+    text-shadow:0 1px 6px rgba(0,0,0,.18);
+  }
+  .thumb{
+    width:64px;
+    height:64px;
+    flex-shrink:0;
+    border-radius:14px;
+    background:rgba(255,255,255,.3);
+    position:relative;
+    overflow:hidden;
+  }
+  .thumb .tg{
+    position:absolute;
+    inset:6px;
+    background-image:var(--garm);
+    background-repeat:no-repeat;
+    background-size:320% 212.5%;
+    will-change:transform;
+  }
+  .info{
+    min-width:0;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+  .ln{
+    position:relative;
+    height:1.15em;
+    line-height:1.15;
+    overflow:hidden;
+  }
+  .ln > span{
+    display:block;
+    white-space:nowrap;
+  }
+  .b-name{font-weight:600;font-size:16px}
+  .b-price{font-weight:500;font-size:14px;opacity:.9}
+
+  .sizes-wrap{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .sz-lbl{
+    font-weight:500;
+    font-size:12px;
+    opacity:.85;
+    margin-right:2px;
+  }
+  .sz{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    font-size:12px;
+    font-weight:600;
+    background:rgba(255,255,255,.22);
+    color:#fff;
+    transition:background .25s var(--ease), color .25s var(--ease), transform .15s var(--ease);
+  }
+  .sz.on{
+    background:#fff;
+    color:#111;
+    text-shadow:none;
+  }
+  .sz:active{
+    transform:scale(.9);
+  }
+
+  .colors-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    flex-shrink:0;
+    min-width:118px;
+  }
+  .c-lbl{
+    font-size:12px;
+    font-weight:500;
+    opacity:.9;
+  }
+  .dots{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .dot{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    transition:box-shadow .25s var(--ease), transform .2s var(--ease);
+  }
+  .dot.on{
+    box-shadow:0 0 0 2px rgba(255,255,255,.95), 0 0 0 4px rgba(0,0,0,.12);
+  }
+  .dot:active{
+    transform:scale(.9);
+  }
+
+  .cur{
+    position:fixed;
+    left:0;
+    top:0;
+    width:58px;
+    height:58px;
+    margin:-29px 0 0 -29px;
+    pointer-events:none;
+    z-index:100;
+    opacity:0;
+    transition:opacity .25s var(--ease);
+    will-change:transform,opacity;
+  }
+  .cur.on{opacity:1}
+  .cur-ring{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.95);
+    background:rgba(255,255,255,.14);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    box-shadow:0 6px 20px -8px rgba(0,0,0,.35);
+    transition:transform .5s var(--ease), background .5s var(--ease), border-color .5s var(--ease);
+  }
+  .cur-dot{
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:6px;
+    height:6px;
+    margin:-3px 0 0 -3px;
+    border-radius:50%;
+    background:#fff;
+    transition:transform .4s var(--ease), opacity .4s var(--ease);
+  }
+  .cur-txt{
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.12em;
+    white-space:nowrap;
+    opacity:0;
+    transform:scale(.6);
+    transition:transform .45s var(--ease), opacity .45s var(--ease);
+    text-shadow:none;
+  }
+  .cur-try{color:#111}
+  .cur-drag{color:#fff}
+
+  .cur[data-mode="try"] .cur-ring{
+    transform:scale(1.5);
+    background:rgba(255,255,255,.92);
+  }
+  .cur[data-mode="try"] .cur-dot{
+    opacity:0;
+    transform:scale(0);
+  }
+  .cur[data-mode="try"] .cur-try{
+    opacity:1;
+    transform:scale(1);
+  }
+
+  .cur[data-mode="drag"] .cur-ring{
+    transform:scale(1.2);
+  }
+  .cur[data-mode="drag"] .cur-dot{
+    opacity:0;
+    transform:scale(0);
+  }
+  .cur[data-mode="drag"] .cur-drag{
+    opacity:1;
+    transform:scale(1);
+  }
+
+  .cur[data-mode="btn"] .cur-ring{
+    transform:scale(.6);
+  }
+  .cur[data-down="1"] .cur-ring{
+    transform:scale(1.05);
+  }
+
+  @media(pointer:coarse){
+    .cur{display:none}
+  }
+
+  @media(max-width:767px){
+    :root{
+      --MH:min(62vh,128vw);
+    }
+    .tabs{
+      overflow-x:auto;
+      scrollbar-width:none;
+      -ms-overflow-style:none;
+    }
+    .tabs::-webkit-scrollbar{display:none}
+    .tabs .pill{height:32px}
+    .tab{
+      height:32px;
+      padding:0 13px;
+      font-size:12px;
+    }
+    .rail{
+      top:auto;
+      transform:none;
+      left:10px;
+      bottom:calc(4.6vh + 150px);
+      padding:6px;
+      gap:6px;
+    }
+    .rail button{
+      width:34px;
+      height:34px;
+    }
+    .rail button svg{
+      width:17px;
+      height:17px;
+    }
+    .arr{display:none}
+    .buy{
+      flex-wrap:wrap;
+      gap:12px 16px;
+      padding:12px 14px;
+      justify-content:space-between;
+    }
+    .info{
+      flex:1 1 calc(100% - 84px);
+    }
+    .colors-wrap{
+      min-width:0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="room" id="room" aria-hidden="true"></div>
+
+<div class="ghost" id="ghost" aria-hidden="true"><span>F</span><span>I</span><span>T</span></div>
+
+<nav class="tabs glass" id="tabs" role="tablist" aria-label="Clothing categories">
+  <div class="pill" id="pill" aria-hidden="true"></div>
+  <button type="button" class="tab on" role="tab" aria-selected="true">Tops</button>
+  <button type="button" class="tab" role="tab" aria-selected="false">Bottoms</button>
+  <button type="button" class="tab" role="tab" aria-selected="false">Outerwear</button>
+  <button type="button" class="tab" role="tab" aria-selected="false">Shoes</button>
+  <button type="button" class="tab" role="tab" aria-selected="false">Accessories</button>
+</nav>
+
+<nav class="rail glass" id="rail" aria-label="Workspace tools">
+  <button type="button" class="on" aria-label="Try-on wardrobe" aria-pressed="true">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16.2 3.2 21 6.3l-2.1 4.2-2.7-1.1V20a1 1 0 0 1-1 1H8.8a1 1 0 0 1-1-1V9.4L5.1 10.5 3 6.3l4.8-3.1A3.4 3.4 0 0 0 12 5.4a3.4 3.4 0 0 0 4.2-2.2Z"/>
+    </svg>
+  </button>
+  <button type="button" aria-label="Shopping bag" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="9" cy="20" r="1.4"/>
+      <circle cx="17.5" cy="20" r="1.4"/>
+      <path d="M2.5 3.5h2.7l2.2 11a1 1 0 0 0 1 .8h9.8a1 1 0 0 0 1-.8l1.3-7H6.2"/>
+    </svg>
+  </button>
+  <button type="button" aria-label="Outfit calendar" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/>
+      <path d="M8 3v4M16 3v4M3.5 9.5h17"/>
+    </svg>
+  </button>
+  <button type="button" aria-label="Profile" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8.5" r="3.5"/>
+      <path d="M5 19.5c1.5-3.3 4.1-4.8 7-4.8s5.5 1.5 7 4.8"/>
+    </svg>
+  </nav>
+
+<main class="stage" id="stage" aria-label="Spatial garment carousel">
+  <div class="arc" id="arc"></div>
+</main>
+
+<div class="model" id="model" aria-hidden="true">
+  <div class="mfig" id="mCur"></div>
+  <div class="mfig" id="mNext"></div>
+  <div class="grid" id="mGrid"></div>
+  <div class="scan" id="mScan"></div>
+</div>
+
+<button type="button" class="arr glass" id="prev" aria-label="Previous garment">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m15 18-6-6 6-6"/>
+  </svg>
+</button>
+<button type="button" class="arr glass" id="next" aria-label="Next garment">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m9 18 6-6-6-6"/>
+  </svg>
+</button>
+
+<section class="buy glass" id="buy" aria-label="Selected garment details">
+  <div class="thumb"><div class="tg" id="bThumb"></div></div>
+  <div class="info">
+    <div class="ln b-name" id="bName"><span>Basic T-shirt</span></div>
+    <div class="ln b-price" id="bPrice"><span>$45</span></div>
+  </div>
+  <div class="sizes-wrap" role="group" aria-label="Select size">
+    <span class="sz-lbl">Size</span>
+    <button type="button" class="sz" aria-pressed="false">S</button>
+    <button type="button" class="sz on" aria-pressed="true">M</button>
+    <button type="button" class="sz" aria-pressed="false">L</button>
+    <button type="button" class="sz" aria-pressed="false">XL</button>
+  </div>
+  <div class="colors-wrap">
+    <div class="ln c-lbl" id="bColor"><span>Color · White</span></div>
+    <div class="dots" id="bDots" role="group" aria-label="Select color"></div>
+  </div>
+</section>
+
+<div class="cur" id="cur" data-mode="drag" aria-hidden="true">
+  <div class="cur-ring"></div>
+  <div class="cur-dot"></div>
+  <div class="cur-txt cur-try">TRY ON</div>
+  <div class="cur-txt cur-drag">DRAG</div>
+</div>
+
+<script>
+(() => {
+  const ITEMS = [
+    {n:"Basic T-shirt", p:45,  g:[1.14,3.06],  m:.37,   c:[["White","#f4f2ee"],["Ash","#c9c7c2"],["Charcoal","#3b3c3f"],["Navy","#27324d"]]},
+    {n:"Basic Sweater", p:105, g:[49.7,1.39],  m:25.0,  c:[["White","#f6f4ef"],["Oat","#ddd3c2"],["Sage","#b9c2ae"],["Black","#1f1f21"]]},
+    {n:"Linen Shirt",   p:95,  g:[98.2,3.33],  m:49.86, c:[["White","#f7f6f1"],["Sand","#d9ccb4"],["Sky","#bcd0e2"],["Olive","#717556"]]},
+    {n:"Grey Hoodie",   p:110, g:[1.14,93.3],  m:74.77, c:[["Heather","#a9a9a8"],["Bone","#e6e1d6"],["Forest","#33463a"],["Black","#1f1f21"]]},
+    {n:"Ringer Tee",    p:55,  g:[49.7,95.3],  m:99.35, c:[["White / Black","#f4f2ee"],["Cream / Navy","#efe6d3"],["Grey / Red","#c9c7c2"],["White / Green","#e9efe8"]]},
+  ];
+
+  const EASE = "cubic-bezier(.2,.8,.2,1)";
+  const SCAN_EASE = "cubic-bezier(.65,0,.35,1)";
+  const mod = (n, m) => ((n % m) + m) % m;
+
+  const mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let reducedMotion = mqReduce.matches;
+  mqReduce.addEventListener("change", (e) => { reducedMotion = e.matches; });
+
+  const roomEl = document.getElementById("room");
+  const ghostEl = document.getElementById("ghost");
+  const ghostLetters = Array.from(ghostEl.children);
+  const tabsEl = document.getElementById("tabs");
+  const pillEl = document.getElementById("pill");
+  const tabBtns = Array.from(tabsEl.querySelectorAll(".tab"));
+  const railEl = document.getElementById("rail");
+  const railBtns = Array.from(railEl.querySelectorAll("button"));
+  const stageEl = document.getElementById("stage");
+  const arcEl = document.getElementById("arc");
+  const mCur = document.getElementById("mCur");
+  const mNext = document.getElementById("mNext");
+  const mGrid = document.getElementById("mGrid");
+  const mScan = document.getElementById("mScan");
+  const prevBtn = document.getElementById("prev");
+  const nextBtn = document.getElementById("next");
+  const bThumb = document.getElementById("bThumb");
+  const bName = document.getElementById("bName");
+  const bPrice = document.getElementById("bPrice");
+  const bColor = document.getElementById("bColor");
+  const bDots = document.getElementById("bDots");
+  const sizeBtns = Array.from(document.querySelectorAll(".sz"));
+  const curEl = document.getElementById("cur");
+
+  let W = window.innerWidth;
+  let H = window.innerHeight;
+  let XS = [];
+
+  function computeMetrics() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    const cw = W < 768 ? Math.min(W * 0.30, 170) : Math.min(W * 0.148, H * 0.33);
+    document.documentElement.style.setProperty("--CW", cw.toFixed(2) + "px");
+    const ratios = W < 768 ? [0, .36, .5, .56, .6, .62] : [0, .215, .345, .432, .49, .52];
+    XS = ratios.map((r) => r * W);
+  }
+
+  function xAt(a) {
+    const idx = Math.min(a, XS.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.min(lo + 1, XS.length - 1);
+    return XS[lo] + (XS[hi] - XS[lo]) * (idx - lo);
+  }
+
+  function movePill(btn, instant) {
+    if (instant) pillEl.style.transition = "none";
+    pillEl.style.width = btn.offsetWidth + "px";
+    pillEl.style.transform = "translateX(" + btn.offsetLeft + "px)";
+    if (instant) {
+      pillEl.getBoundingClientRect();
+      pillEl.style.transition = "";
+    }
+  }
+
+  computeMetrics();
+  movePill(tabsEl.querySelector(".tab.on"), true);
+  window.addEventListener("resize", () => {
+    computeMetrics();
+    movePill(tabsEl.querySelector(".tab.on"), true);
+  });
+
+  // Build 10 garment cards (2 copies of the 5 items)
+  const cards = [];
+  for (let i = 0; i < 10; i++) {
+    const item = ITEMS[i % 5];
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "card glass";
+    card.dataset.i = String(i);
+    card.setAttribute("aria-label", "Try on " + item.n + ", $" + item.p);
+
+    const g = document.createElement("div");
+    g.className = "g";
+    g.style.backgroundPosition = item.g[0] + "% " + item.g[1] + "%";
+
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = item.n;
+
+    const pr = document.createElement("div");
+    pr.className = "pr";
+    pr.textContent = "$" + item.p;
+
+    const sheen = document.createElement("div");
+    sheen.className = "sheen";
+
+    card.append(g, nm, pr, sheen);
+    card.addEventListener("pointerenter", () => {
+      if (reducedMotion) return;
+      sheen.animate(
+        [{ transform: "translateX(-120%)" }, { transform: "translateX(120%)" }],
+        { duration: 1000, easing: EASE }
+      );
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        focusCard(i);
+      }
+    });
+    arcEl.appendChild(card);
+    cards.push({ el: card, seed: i * 1.37 + 0.4 });
+  }
+
+  // Rolling text helper
+  function rollText(lnEl, text, instant) {
+    const current = lnEl.querySelector("span:last-child");
+    if (current && current.textContent === text) return;
+    if (instant || reducedMotion) {
+      lnEl.innerHTML = "";
+      const s = document.createElement("span");
+      s.textContent = text;
+      lnEl.appendChild(s);
+      return;
+    }
+    const prevSpans = Array.from(lnEl.children);
+    for (let k = 0; k < prevSpans.length - 1; k++) prevSpans[k].remove();
+    const oldSpan = lnEl.firstElementChild;
+    const newSpan = document.createElement("span");
+    newSpan.textContent = text;
+    lnEl.appendChild(newSpan);
+
+    if (oldSpan) {
+      oldSpan.style.position = "absolute";
+      oldSpan.style.left = "0";
+      oldSpan.style.right = "0";
+      oldSpan.style.top = "0";
+      const outAnim = oldSpan.animate(
+        [{ transform: "translateY(0)" }, { transform: "translateY(-110%)" }],
+        { duration: 620, easing: EASE, fill: "forwards" }
+      );
+      outAnim.onfinish = () => oldSpan.remove();
+    }
+
+    newSpan.animate(
+      [{ transform: "translateY(110%)" }, { transform: "translateY(0)" }],
+      { duration: 620, easing: EASE }
+    );
+  }
+
+  let thumbAnim = null;
+  let activeItemIdx = 0;
+
+  function updateBuyCard(idx, instant) {
+    activeItemIdx = idx;
+    const item = ITEMS[idx];
+
+    bThumb.style.backgroundPosition = item.g[0] + "% " + item.g[1] + "%";
+    if (thumbAnim) {
+      thumbAnim.cancel();
+      thumbAnim = null;
+    }
+    if (!instant && !reducedMotion) {
+      thumbAnim = bThumb.animate(
+        [
+          { transform: "translateY(70%) scale(.8)" },
+          { transform: "translateY(0) scale(1)" }
+        ],
+        { duration: 650, easing: EASE }
+      );
+    }
+
+    rollText(bName, item.n, instant);
+    rollText(bPrice, "$" + item.p, instant);
+    rollText(bColor, "Color · " + item.c[0][0], instant);
+
+    bDots.innerHTML = "";
+    item.c.forEach(([cname, hex], ci) => {
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "dot" + (ci === 0 ? " on" : "");
+      dot.style.background = hex;
+      dot.setAttribute("aria-label", "Color " + cname);
+      dot.setAttribute("aria-pressed", ci === 0 ? "true" : "false");
+      dot.addEventListener("click", () => {
+        Array.from(bDots.children).forEach((d, di) => {
+          const on = di === ci;
+          d.classList.toggle("on", on);
+          d.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        rollText(bColor, "Color · " + cname, false);
+      });
+      bDots.appendChild(dot);
+    });
+  }
+
+  // Try-on scan
+  let shownOutfit = -1;
+  let scanAnims = [];
+  let scanToken = 0;
+
+  function cancelScan() {
+    scanAnims.forEach((a) => a.cancel());
+    scanAnims = [];
+  }
+
+  function tryOn(idx, isInitial) {
+    shownOutfit = idx;
+    const item = ITEMS[idx];
+    updateBuyCard(idx, isInitial);
+    cancelScan();
+    const myToken = ++scanToken;
+
+    if (reducedMotion) {
+      mCur.style.backgroundPositionX = item.m + "%";
+      mCur.style.opacity = "1";
+      mNext.style.clipPath = "inset(0 0 100% 0)";
+      mGrid.style.clipPath = "inset(0 0 100% 0)";
+      mScan.style.opacity = "0";
+      return;
+    }
+
+    mNext.style.backgroundPositionX = item.m + "%";
+
+    const a1 = mNext.animate(
+      [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0 0 0% 0)" }],
+      { duration: 950, easing: SCAN_EASE, fill: "forwards" }
+    );
+    const a2 = mGrid.animate(
+      [
+        { clipPath: "inset(0 0 100% 0)" },
+        { clipPath: "inset(0 0 0% 0)", offset: 0.5 },
+        { clipPath: "inset(100% 0 0% 0)" }
+      ],
+      { duration: 1092, easing: SCAN_EASE }
+    );
+    const a3 = mScan.animate(
+      [
+        { top: "0%", transform: "scaleX(.2)", opacity: 0 },
+        { top: "6%", transform: "scaleX(1)", opacity: 1, offset: 0.08 },
+        { top: "94%", transform: "scaleX(1)", opacity: 1, offset: 0.92 },
+        { top: "100%", transform: "scaleX(.2)", opacity: 0 }
+      ],
+      { duration: 950, easing: SCAN_EASE }
+    );
+    const a4 = mNext.animate(
+      [{ transform: "scale(1.012)" }, { transform: "scale(1)" }],
+      { duration: 1250, easing: "ease-out" }
+    );
+
+    scanAnims = [a1, a2, a3, a4];
+    a1.onfinish = () => {
+      if (myToken !== scanToken) return;
+      mCur.style.backgroundPositionX = item.m + "%";
+      mCur.style.opacity = "1";
+      cancelScan();
+    };
+  }
+
+  // Initialize buy card text immediately
+  updateBuyCard(0, true);
+
+  // Arc & input state
+  let pos = 0;
+  let target = 0;
+  let intro = reducedMotion ? 1 : 0;
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let p0 = 0;
+  let lastX = 0;
+  let lastT = 0;
+  let vel = 0;
+  let moved = 0;
+  let downCardIdx = null;
+
+  function focusCard(cardIdx) {
+    const u = mod(cardIdx - pos + 5, 10) - 5;
+    target = Math.round(pos + u);
+  }
+
+  stageEl.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    p0 = pos;
+    lastX = e.clientX;
+    lastT = performance.now();
+    vel = 0;
+    moved = 0;
+    const cardEl = e.target.closest(".card");
+    downCardIdx = cardEl ? Number(cardEl.dataset.i) : null;
+    curEl.dataset.down = "1";
+    updateCursorMode(e);
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      if (curInit || e.clientX > 0 || e.clientY > 0) {
+        curEl.classList.add("on");
+        curTargetX = e.clientX;
+        curTargetY = e.clientY;
+        if (!curInit) {
+          curX = curTargetX;
+          curY = curTargetY;
+          curInit = true;
+        }
+        px = (e.clientX / W) - 0.5;
+        py = (e.clientY / H) - 0.5;
+        updateCursorMode(e);
+      }
+    }
+
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    moved = Math.hypot(dx, dy);
+    pos = p0 - dx / XS[1];
+
+    const now = performance.now();
+    const dt = now - lastT;
+    if (dt >= 4) {
+      const instVel = (e.clientX - lastX) / dt;
+      vel = vel * 0.35 + instVel * 0.65;
+      lastX = e.clientX;
+      lastT = now;
+    }
+  });
+
+  function endDrag(e) {
+    delete curEl.dataset.down;
+    if (!dragging) return;
+    dragging = false;
+    const dtIdle = performance.now() - lastT;
+    const flick = dtIdle > 80 ? 0 : vel;
+
+    if (moved < 6) {
+      if (downCardIdx !== null) {
+        focusCard(downCardIdx);
+      } else {
+        target = Math.round(pos);
+      }
+    } else {
+      target = Math.round(pos - flick * 3.2);
+    }
+    downCardIdx = null;
+    updateCursorMode(e);
+  }
+
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+  document.addEventListener("mouseleave", () => curEl.classList.remove("on"));
+
+  // Wheel
+  let wheelAcc = 0;
+  let lastWheel = 0;
+  window.addEventListener("wheel", (e) => {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    wheelAcc += delta;
+    const now = performance.now();
+    if (Math.abs(wheelAcc) >= 60 && now - lastWheel >= 260) {
+      target += wheelAcc > 0 ? 1 : -1;
+      wheelAcc = 0;
+      lastWheel = now;
+    }
+  }, { passive: true });
+
+  // Keyboard & arrow buttons
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") target -= 1;
+    else if (e.key === "ArrowRight") target += 1;
+  });
+  prevBtn.addEventListener("click", () => { target -= 1; });
+  nextBtn.addEventListener("click", () => { target += 1; });
+
+  // Tabs
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      movePill(btn, false);
+      btn.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
+      target += 5;
+    });
+  });
+
+  // Rail
+  railBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      railBtns.forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    });
+  });
+
+  // Sizes
+  sizeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      sizeBtns.forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    });
+  });
+
+  // Cursor state
+  let curTargetX = W / 2;
+  let curTargetY = H / 2;
+  let curX = W / 2;
+  let curY = H / 2;
+  let curInit = false;
+  let px = 0;
+  let py = 0;
+  let sx = 0;
+  let sy = 0;
+
+  function updateCursorMode(e) {
+    if (dragging) {
+      curEl.dataset.mode = "drag";
+      return;
+    }
+    const targetEl = e && e.target && e.target.nodeType === 1 ? e.target : null;
+    if (!targetEl) {
+      curEl.dataset.mode = "drag";
+      return;
+    }
+    if (targetEl.closest(".tabs button, .rail button, .arr, .buy button")) {
+      curEl.dataset.mode = "btn";
+    } else if (targetEl.closest(".card")) {
+      curEl.dataset.mode = "try";
+    } else {
+      curEl.dataset.mode = "drag";
+    }
+  }
+
+  // Main animation loop
+  let firstFrame = true;
+  let lastRoomTf = "";
+  let lastGhostTf = "";
+  let lastCurTf = "";
+  const lastLetterTf = ["", "", ""];
+  let lastIntroDone = false;
+
+  function frame(nowMs) {
+    const t = nowMs * 0.001;
+
+    if (reducedMotion) {
+      intro = 1;
+      pos = target;
+    } else {
+      intro = Math.min(1, intro + 0.012);
+      if (!dragging) {
+        pos += (target - pos) * 0.11;
+      }
+    }
+
+    const ie = reducedMotion ? 1 : 1 - Math.pow(1 - intro, 3);
+
+    // Pointer smoothing
+    sx += (px - sx) * 0.06;
+    sy += (py - sy) * 0.06;
+
+    // Cursor smoothing
+    curX += (curTargetX - curX) * 0.22;
+    curY += (curTargetY - curY) * 0.22;
+    const curTf = "translate3d(" + curX.toFixed(1) + "px," + curY.toFixed(1) + "px,0)";
+    if (curTf !== lastCurTf) {
+      lastCurTf = curTf;
+      curEl.style.transform = curTf;
+    }
+
+    // Parallax: Room & Ghost
+    const roomScale = 1.08 - 0.03 * ie;
+    const roomTf =
+      "translate3d(" + (-sx * 22).toFixed(2) + "px," + (-sy * 14).toFixed(2) + "px,0) scale(" + roomScale.toFixed(4) + ")";
+    if (roomTf !== lastRoomTf) {
+      lastRoomTf = roomTf;
+      roomEl.style.transform = roomTf;
+    }
+
+    const ghostTf =
+      "translate(calc(-50% - " + (sx * 40).toFixed(2) + "px)," + (-sy * 16).toFixed(2) + "px)";
+    if (ghostTf !== lastGhostTf) {
+      lastGhostTf = ghostTf;
+      ghostEl.style.transform = ghostTf;
+    }
+
+    if (!lastIntroDone) {
+      for (let li = 0; li < ghostLetters.length; li++) {
+        const rise = (1 - ie) * (60 + 30 * li);
+        const ltf = "translateY(" + rise.toFixed(2) + "px)";
+        if (ltf !== lastLetterTf[li]) {
+          lastLetterTf[li] = ltf;
+          ghostLetters[li].style.transform = ltf;
+        }
+      }
+      if (ie >= 1) lastIntroDone = true;
+    }
+
+    // Cards
+    const cardScaleIntro = 0.6 + 0.4 * ie;
+    for (let i = 0; i < 10; i++) {
+      const c = cards[i];
+      const { el, seed } = c;
+      const u = mod(i - pos + 5, 10) - 5;
+      const a = Math.abs(u);
+      const sg = u === 0 ? 0 : (u > 0 ? 1 : -1);
+      const x = sg * xAt(a) * ie;
+
+      let s, z, op, ry, blur = 0;
+      if (a < 1) {
+        s = 0.55 + 0.45 * a;
+        z = -260 * (1 - a);
+        op = a;
+        ry = -sg * 16 * a;
+      } else {
+        s = 1 / (1 + 0.3 * Math.pow(a - 1, 1.15));
+        z = -110 * (a - 1);
+        op = 1;
+        ry = -sg * (16 + 9 * Math.min(2, a - 1));
+        blur = Math.max(0, a - 1.6) * 2.4;
+      }
+
+      if (a > 3.4) {
+        op *= Math.max(0, 1 - (a - 3.4) / 0.8);
+      }
+      op *= ie;
+
+      if (op < 0.01) {
+        if (c.vis !== false) {
+          c.vis = false;
+          el.style.visibility = "hidden";
+          el.style.opacity = "0";
+          el.style.zIndex = "1";
+        }
+        continue;
+      }
+
+      const bob = reducedMotion ? 0 : Math.sin(t * 1.1 + seed) * H * 0.006 * Math.min(1, a);
+      const y = bob - (1 - s) * H * 0.04;
+      ry += sx * 10;
+      const rx = -sy * 6;
+
+      if (c.vis !== true) {
+        c.vis = true;
+        el.style.visibility = "visible";
+      }
+      const opStr = op.toFixed(3);
+      if (c.op !== opStr) {
+        c.op = opStr;
+        el.style.opacity = opStr;
+      }
+      const zStr = String(a < 1 ? 1 : Math.round(100 - 10 * a));
+      if (c.z !== zStr) {
+        c.z = zStr;
+        el.style.zIndex = zStr;
+      }
+      const fStr = blur > 0.05 ? "blur(" + blur.toFixed(1) + "px)" : "none";
+      if (c.f !== fStr) {
+        c.f = fStr;
+        el.style.filter = fStr;
+      }
+      const tfStr =
+        "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0) " +
+        "perspective(1300px) translateZ(" + z.toFixed(2) + "px) " +
+        "rotateY(" + ry.toFixed(2) + "deg) rotateX(" + rx.toFixed(2) + "deg) " +
+        "scale(" + (s * cardScaleIntro).toFixed(4) + ")";
+      if (c.tf !== tfStr) {
+        c.tf = tfStr;
+        el.style.transform = tfStr;
+      }
+    }
+
+    // Settle check
+    const settledIdx = mod(Math.round(target), 5);
+    if (!dragging && Math.abs(target - pos) < 0.02 && settledIdx !== shownOutfit) {
+      tryOn(settledIdx, firstFrame);
+    }
+    firstFrame = false;
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

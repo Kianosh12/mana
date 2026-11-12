@@ -1,0 +1,6 @@
+{
+  "name": "VirtualFit: Spatial Try-On",
+  "description": "A visionOS-style spatial virtual try-on hero featuring a 3D frosted-glass garment arc, animated scan-line try-on reveal, and interactive buy card.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
